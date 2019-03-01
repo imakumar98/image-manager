@@ -1,1 +1,5 @@
 node_modules/
+assets/vook/books/*
+assets/vook/other/*
+!assets/vook/books/.gitkeep
+!assets/vook/other/.gitkeep
