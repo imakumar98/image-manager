@@ -71,16 +71,12 @@ app.post('/vook/book',function (req, res) {
             console.log(url);
             sharp('static/frame.png').overlayWith('static/temp.jpg').toFile(url,function(err,info){
                 if(err) return res.json(err);
-                var tempFile = __dirname + '/static/temp.jpg'; 
-                fs.unlink(tempFile,(err)=>{
-                    if(err) return res.json(err);
-                    res.json({
-                        url: APP_URL +'/'+ url,
-                        message: 'File uploaded successffully',
-                        success: true,
-                        error: false
-                    });
-                })
+                res.json({
+                    url: APP_URL +'/'+ url,
+                    message: 'File uploaded successffully',
+                    success: true,
+                    error: false
+                });
                 
             })
         })
