@@ -1,122 +1,142 @@
 //IMPORT MODULES
 // require('dotenv').load();
+
+// core modules
+const fs = require('fs');
+const crypto = require('crypto');
+
+// third paryt modules
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
-const crypto = require('crypto');
 const path = require('path');
-const fs = require('fs');
 const sharp = require('sharp');
 
 //MENTION PORT
 const port = process.env.PORT || 5000;
 const APP_URL = process.env.APP_URL || 'http://localhost:' + port;
 
-
 const app = express();
 
 //CORS MIDDLEWARE FOR CROSS DOMAIN REQUEST
 app.use(cors());
 
-
-//EXPRESS MIDDLEWARE FOR PARSING STATIC FILES
-app.use('/assets',express.static(__dirname +'/assets'));
+//EXPRESS MIDDLEWARE FOR SERVING STATIC FILES
+app.use('/assets', express.static(__dirname + '/assets'));
 
 //MULTER CONFIGURATION FOR VOOK BOOK UPLOAD
-var storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        if(req.route.path=='/vook/book') cb(null, 'assets/vook/books');
-        else if(req.route.path=='/vook/other') cb(null,'assets/vook/other');
-    },
-    
-    filename: function (req, file, cb) {
-        crypto.pseudoRandomBytes(16, function (err, raw) {
-        if (err) return cb(err)
-        cb(null, raw.toString('hex') + path.extname(file.originalname.toLowerCase()))
-       });
+
+const BOOK_DIRECTORY = 'assets/vook/books';
+const OTHER_DIRECTORY = 'assets/vook/other';
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (req.route.path === '/vook/book') return cb(null, path.resolve(__dirname, BOOK_DIRECTORY));
+    return cb(null, path.resolve(__dirname, OTHER_DIRECTORY));
+  },
+
+  filename: (req, file, cb) => {
+    return cb(
+      null,
+      new Date().getTime() + path.extname(file.originalname.toLowerCase())
+    );
+  },
+});
+
+const upload = multer({
+  storage: storage,
+  fileFilter: (req, file, callback) => {
+    if (!file.originalname.toLowerCase().match(/\.(jpe?g|png|gif)$/)) {
+      return callback(
+        {
+          message: 'Error: Invalid file extension',
+          error: true,
+          success: false,
+        },
+        false
+      );
     }
-  });
-var upload = multer({
-    storage: storage,
-    fileFilter: function(req,file,cb){
-        if(!file.originalname.match(/\.(jpg|jpeg|png|gif|JPG)$/)){
-            var errorResponse = {
-                message: 'Error: Invalid file extension',
-                error: true,
-                success: false
-            }
-            return cb(errorResponse, false);
-        }
-        cb(null,true);
-    } 
+    return callback(null, true);
+  },
 }).single('image');
 
-
-  
-
-//HOMEPAGE URL
-app.get('/',(req,res)=>{
-    res.send('Image manager app');
+// HOMEPAGE URL
+app.get('/', (req, res) => {
+  res.send('Image manager app');
 });
 
+app.post('/vook/book', (req, res) => {
+  upload(req, res, (err) => {
+    if (err) return res.json(err);
 
-//UPLOAD BOOK API
-app.post('/vook/book',function (req, res) {
-   
-    upload(req, res,(err)=> {
-        if (err) res.json(err);
-        var url = req.file.destination +'/'+ req.file.filename;
-        sharp(url).resize(552,780).toFile('static/temp.jpg',function(err){
-            if(err) return res.json(err);
-            console.log(url);
-            sharp('static/frame.png').overlayWith('static/temp.jpg').toFile(url,function(err,info){
-                if(err) return res.json(err);
-                res.json({
-                    url: APP_URL +'/'+ url,
-                    message: 'File uploaded successffully',
-                    success: true,
-                    error: false
-                });
-                
-            })
-        })
-    });
+    const inputFile = req.file.destination + '/' + req.file.filename;
+    const outputFileName = (new Date()).getTime() + req.file.filename;
+    const outputFile = req.file.destination + '/' + outputFileName;
 
-    
-})
+    // Image Constants
+    const WIDTH = 552;
+    const HEIGHT = 780;
+
+    const PADDING_TOP = (1000 - HEIGHT) / 2;
+    const PADDING_LEFT = (736 - WIDTH) / 2;
+    const BG_COLOR = { r: 248, g: 248, b: 248, alpha: 1 };
+
+    console.log('Processing image: ', inputFile);
+    sharp(inputFile)
+      .resize(WIDTH, HEIGHT)
+      .extend({
+        top: PADDING_TOP,
+        bottom: PADDING_TOP,
+        left: PADDING_LEFT,
+        right: PADDING_LEFT,
+        background: BG_COLOR,
+      })
+      .jpeg({
+        progressive: true,
+        force: false,
+      })
+      .png({
+        force: false,
+      })
+      .toFile(outputFile, (err) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).send('Internal Server Error');
+        }
+        return res.json({
+          url: `${APP_URL}/${BOOK_DIRECTORY}/${outputFileName}`,
+          message: 'File uploaded successfully',
+          success: true,
+          error: false,
+        });
+      });
+  });
+});
 
 //UPLOAD OTHER VOOK IMAGE
-app.post('/vook/other',function (req, res) {
-    upload(req, res, function (err) {
-        if (err) return res.json(err);
-        res.json({
-            url: APP_URL +'/'+ req.file.destination +'/'+ req.file.filename,
-            message: 'File uploaded successfully',
-            success: true,
-            error: false
-        });
+app.post('/vook/other', function(req, res) {
+  upload(req, res, function(err) {
+    if (err) return res.json(err);
+    res.json({
+      url: `${APP_URL}/${OTHER_DIRECTORY}/${req.file.filename}`,
+      message: 'File uploaded successfully',
+      success: true,
+      error: false,
     });
-})
-
-
-
-
-
-
-
-//DELETE BOOK IMAGE API
-app.delete('/vook/book/:id',(req,res)=>{
-    var id = req.params.id;
-    var file = __dirname + '/assets/vook/books/'+id;
-    fs.unlink(file, (err) => {
-        if (err)return res.json(err);
-        res.json({message:"File deleted", success:true,error:false});
-        
-    });
-
-})
-
-app.listen(port,()=>{
-    console.log(`Server started at port ${port}`);
+  });
 });
 
+//DELETE BOOK IMAGE API
+app.delete('/vook/book/:id', (req, res) => {
+  const id = req.params.id;
+  const file = path.resolve(__dirname, BOOK_DIRECTORY, id);
+
+  fs.unlink(file, (err) => {
+    if (err) return res.json(err);
+    res.json({ message: 'File deleted', success: true, error: false });
+  });
+});
+
+app.listen(port, () => {
+  console.log(`Server started at port ${port}`);
+});
