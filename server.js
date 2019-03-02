@@ -14,7 +14,8 @@ const sharp = require('sharp');
 
 //MENTION PORT
 const port = process.env.PORT || 5000;
-const APP_URL = process.env.APP_URL || 'http://localhost:' + port;
+const APP_URL = "https://image-manager.server.vook.in";
+console.log(APP_URL);
 
 const app = express();
 
@@ -81,7 +82,7 @@ app.post('/vook/book', (req, res) => {
     const PADDING_LEFT = (736 - WIDTH) / 2;
     const BG_COLOR = { r: 248, g: 248, b: 248, alpha: 1 };
 
-    console.log('Processing image: ', inputFile);
+    
     sharp(inputFile)
       .resize(WIDTH, HEIGHT)
       .extend({
