@@ -1,5 +1,5 @@
 node_modules/
 assets/vook/books/*
-assets/vook/other/*
+.env
 !assets/vook/books/.gitkeep
-!assets/vook/other/.gitkeep
+

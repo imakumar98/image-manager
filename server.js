@@ -1,127 +1,120 @@
 //Import Depencies
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
+const fs = require('fs');
 const sharp = require('sharp');
+const bodyParser = require('body-parser');
 
 
+require('dotenv').config()
 
+
+//Import function file
+const { upload, getResponse } = require('./functions');
+
+
+//Import Constants
+const { APP_URL, 
+        BOOK_IMAGES_DIRECTORY,
+        OTHER_IMAGES_DIRECTORY,
+        BOOK_OBJECT_HEIGHT,
+        BOOK_OBJECT_WIDTH,
+        BOOK_BACKGROUND_COLOR,
+        VERTICAL_PADDING,
+        HORIZONTAL_PADDING } = require('./config');
+
+
+//Start App
 const app = express();
 
 
-//Set Static directory
+//Define Static Directory(Public)
 app.use('/assets', express.static(__dirname + '/assets'));
 
+//Initialize body parser
+app.use(bodyParser.json())
+
+app.use(bodyParser.urlencoded({ extended: false }))
 
 
-//Set Book Directory
-const BOOK_DIRECTORY = 'assets/vook/books';
+//Endpoint to upload book image
+app.post('/api/upload/book', (req, res) => {
 
-//Set Other Images directory
-const OTHER_DIRECTORY = 'assets/vook';
-
-
-
-
-
-
-
-
-//Homepage Endpoint
-app.get('/', (req,res)=>{
-    res.send("Welcome to image manager service");
-
-});
-
-
-//Storage Function
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        if (req.route.path === '/vook/book') return cb(null, path.resolve(__dirname, BOOK_DIRECTORY));
-        return cb(null, path.resolve(__dirname, OTHER_DIRECTORY));
-    },
-
-    filename: (req, file, cb) => {
-        return cb(
-        null,
-        new Date().getTime() + path.extname(file.originalname.toLowerCase())
-        );
-    },
-});
   
 
-//Upload Function
-const upload = multer({
-    storage: storage,
-    fileFilter: (req, file, callback) => {
-        if (!file.originalname.toLowerCase().match(/\.(jpe?g|png|gif)$/)) {
-        return callback(
-            {
-            message: 'Error: Invalid file extension',
-            error: true,
-            success: false,
-            },
-            false
-        );
-        }
-        return callback(null, true);
-    },
-}).single('image');
-
-
-
-
-//Upload Book
-app.post('/vook/book', (req, res) => {
     upload(req, res, (err) => {
-      if (err) return res.json(err);
+
+      if (err) return res.status(500).json(err);
   
+      //Input file path
       const inputFile = req.file.destination + '/' + req.file.filename;
+
+      //Output Filename
       const outputFileName = (new Date()).getTime() + req.file.filename;
+
+      //Output file path
       const outputFile = req.file.destination + '/' + outputFileName;
   
-      // Image Constants
-      const WIDTH = 552;
-      const HEIGHT = 780;
-  
-      const PADDING_TOP = (1000 - HEIGHT) / 2;
-      const PADDING_LEFT = (736 - WIDTH) / 2;
-      const BG_COLOR = { r: 248, g: 248, b: 248, alpha: 1 };
-  
-      
       sharp(inputFile)
-        .resize(WIDTH, HEIGHT)
-        .extend({
-          top: PADDING_TOP,
-          bottom: PADDING_TOP,
-          left: PADDING_LEFT,
-          right: PADDING_LEFT,
-          background: BG_COLOR,
-        })
-        .jpeg({
-          progressive: true,
-          force: false,
-        })
-        .png({
-          force: false,
-        })
-        .toFile(outputFile, (err) => {
-          if (err) {
-            console.error(err);
-            return res.status(500).send('Internal Server Error');
-          }
-          return res.json({data: {
-            url: `http://localhost/${BOOK_DIRECTORY}/${outputFileName}`,
-            message: 'File uploaded successfully',
-            success: true,
-            error: false,
-          }});
+      .resize(BOOK_OBJECT_WIDTH, BOOK_OBJECT_HEIGHT)
+      .extend({
+          top: VERTICAL_PADDING,
+          bottom: VERTICAL_PADDING,
+          left: HORIZONTAL_PADDING,
+          right: HORIZONTAL_PADDING,
+          background: BOOK_BACKGROUND_COLOR,
+      })
+      .jpeg({
+        progressive: true,
+        force: false,
+      })
+      .png({
+        force: false,
+      })
+      .toFile(outputFile, (err) => {
+
+        if (err) return res.status(500).send('Internal Server Error');
+          
+          const fileToDelete = './assets/vook/books/'+req.file.filename;
+
+          fs.unlinkSync(fileToDelete);
+
+          const response = getResponse(`${APP_URL}/${BOOK_IMAGES_DIRECTORY}/${outputFileName}`, 'Image Uploaded');
+
+          return res.json(response);
+
         });
     });
-  });
+
+
+});
+
+
+//Endpoint to upload other images(banners, logo, promotions)
+app.post('/api/upload/other', (req,res)=>{
 
 
 
-app.listen(3000, ()=>{
-    console.log("App is running on 3000");
+    upload(req, res, (err) => {
+
+      if(err) return res.status(500).json(err);
+      
+      const response = getResponse(`${APP_URL}/${OTHER_IMAGES_DIRECTORY}/${req.file.filename}`, 'Image Uploaded');
+
+      return res.json(response);
+
+    })
+
+
+  
+
+});
+
+
+
+
+//App Listen
+app.listen(process.env.PORT, ()=>{
+  
+  console.log(`Image Manager runnnig on ${process.env.PORT}`);
+
 })
